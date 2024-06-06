@@ -1,0 +1,66 @@
+---
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: kube-vip
+  namespace: kube-system
+spec:
+  # renovate: datasource=helm
+  repo: https://appkins-org.github.io/charts
+  chart: kube-vip
+  version: "0.4.6"
+  targetNamespace: kube-system
+  bootstrap: true
+  helmVersion: v3
+  valuesContent: |-
+    config:
+      address: ${k3s_registration_address}
+    env:
+      # vip_interface: "eno1"
+      vip_arp: "true"
+      lb_enable: "true"
+      cp_enable: "true"
+      cp_namespace: "kube-system"
+      svc_enable: "false"
+      vip_leaderelection: "true"
+      vip_leaseduration: "15"
+      vip_renewdeadline: "10"
+      vip_retryperiod: "2"
+      prometheus_server: ":2112"
+
+    nodeSelector:
+      kubernetes.io/os: linux
+      node-role.kubernetes.io/control-plane: "true"
+
+    tolerations:
+      - effect: NoSchedule
+        operator: Exists
+      - effect: NoExecute
+        operator: Exists
+
+    affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: node-role.kubernetes.io/master
+                  operator: Exists
+            - matchExpressions:
+                - key: node-role.kubernetes.io/control-plane
+                  operator: Exists
+
+    securityContext:
+      capabilities:
+        add:
+          - NET_ADMIN
+          - NET_RAW
+
+    volumeMounts:
+      - mountPath: /etc/kubernetes/admin.conf
+        name: kubeconfig
+
+    volumes:
+      - name: kubeconfig
+        hostPath:
+          path: /etc/rancher/k3s/k3s.yaml
+

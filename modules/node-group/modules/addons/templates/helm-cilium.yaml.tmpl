@@ -1,0 +1,106 @@
+---
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: cilium
+  namespace: kube-system
+spec:
+  repo: https://helm.cilium.io/
+  chart: cilium
+  version: 1.15.4
+  targetNamespace: kube-system
+  helmVersion: v3
+  bootstrap: true
+  valuesContent: |-
+    autoDirectNodeRoutes: true
+    bpf:
+      masquerade: true
+    cgroup:
+      automount:
+        enabled: false
+      hostRoot: /sys/fs/cgroup
+    cluster:
+      id: 1
+      name: kubernetes
+    cni:
+      binPath: /var/lib/rancher/k3s/data/current/bin
+      confPath: /var/lib/rancher/k3s/agent/etc/cni/net.d
+    containerRuntime:
+      integration: containerd
+      socketPath: /var/run/k3s/containerd/containerd.sock
+    # devices: enp+
+    enableRuntimeDeviceDetection: true
+    endpointRoutes:
+      enabled: true
+    hubble:
+      enabled: false
+    ipam:
+      mode: kubernetes
+    ipv4NativeRoutingCIDR: "${cluster_cidr}"
+    k8sServiceHost: 127.0.0.1
+    k8sServicePort: 6444
+    kubeProxyReplacement: true
+    kubeProxyReplacementHealthzBindAddr: 0.0.0.0:10256
+    l2announcements:
+      enabled: true
+    loadBalancer:
+      algorithm: maglev
+      mode: dsr
+    localRedirectPolicy: true
+    operator:
+      replicas: 1
+      rollOutPods: true
+    rollOutCiliumPods: true
+    routingMode: native
+    securityContext:
+      capabilities:
+        ciliumAgent:
+          - CHOWN
+          - KILL
+          - NET_ADMIN
+          - NET_RAW
+          - IPC_LOCK
+          - SYS_ADMIN
+          - SYS_RESOURCE
+          - DAC_OVERRIDE
+          - FOWNER
+          - SETGID
+          - SETUID
+        cleanCiliumState:
+          - NET_ADMIN
+          - SYS_ADMIN
+          - SYS_RESOURCE
+    ingressController:
+      enabled: true
+      enforceHttps: false
+      loadbalancerMode: shared
+      default: true
+      defaultSecretName: default-cert
+      defaultSecretNamespace: kube-system
+      service:
+        type: LoadBalancer
+        labels:
+          app: cilium-ingress
+        annotations:
+          io.cilium/lb-ipam-ips: 10.1.40.200
+---
+apiVersion: cilium.io/v2alpha1
+kind: CiliumL2AnnouncementPolicy
+metadata:
+  name: policy
+spec:
+  loadBalancerIPs: true
+  externalIPs: true
+  interfaces:
+    - ^e[tn][hpo].*
+  nodeSelector:
+    matchLabels:
+      kubernetes.io/os: linux
+---
+apiVersion: cilium.io/v2alpha1
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: pool
+spec:
+  cidrs:
+    - cidr: "${subnet_cidr}"

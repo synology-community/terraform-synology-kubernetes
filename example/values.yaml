@@ -1,0 +1,49 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: bootstrap
+  namespace: argocd
+spec:
+  goTemplate: true
+  generators:
+    - git:
+        files:
+          - path: ./**/config.json
+        repoURL: https://github.com/appkins-org/apps.git
+        revision: dev
+        values:
+          path: '{{trimSuffix "/config.json" .path.path}}'
+          name: '{{trimSuffix "/config.json" .path.path | base}}'
+          # Use the path segments to determine the project name
+          # If the path is "foo/bar/baz", the project name will be "bar"
+          # If the path is "foo", the project name will be "default"
+          project: '{{ list .path.segments | initial | initial | mustLast | default "default" }}'
+  syncPolicy:
+    preserveResourcesOnDeletion: true
+  template:
+    metadata:
+      name: "{{default .values.name .name}}"
+      labels:
+        app: "{{default .values.name .name}}"
+      namespace: argocd
+    spec:
+      destination:
+        namespace: '{{default "default" .namespace}}'
+        server: https://kubernetes.default.svc
+      project: '{{any (empty .values.project) (eq .values.project .values.name) | ternary "default" .values.project}}'
+      source:
+        repoURL: https://github.com/appkins-org/apps.git
+        targetRevision: dev
+        path: "{{.values.path}}"
+        plugin:
+          name: lovely-vault-plugin
+          env:
+            - name: ARGOCD_ENV_LOVELY_HELM_NAME
+              value: "{{default .values.name .name}}"
+            - name: ARGOCD_ENV_LOVELY_HELM_NAMESPACE
+              value: '{{default "default" .namespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+          allowEmpty: true
